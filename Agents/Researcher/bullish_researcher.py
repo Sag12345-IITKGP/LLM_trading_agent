@@ -1,6 +1,7 @@
 import os
 import asyncio
 import requests
+import sys
 from google.adk import Agent, Runner
 from google.adk.sessions import InMemorySessionService
 from google.adk.tools import google_search
@@ -8,6 +9,12 @@ from google.genai import types
 from dotenv import load_dotenv
 import json
 import time
+
+
+custom_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'custom')
+sys.path.append(os.path.dirname(custom_path))
+
+from custom.price_prediction import predict_stock_prices
 
 class BullishResearcher:
     
@@ -94,7 +101,21 @@ class BullishResearcher:
 
             Always remember: Your role is to find and articulate the best possible investment case while maintaining intellectual honesty and professional integrity. You seek to uncover hidden value and growth potential that others might overlook.
             """,
+            tools=[self.get_stock_price_prediction]
         )
+    
+    def get_stock_price_prediction(self, ticker_symbol: str, days_to_predict: int = 30, training_years: int = 5, seq_length: int = 30) -> str:
+        try:
+            print(f"🔍 Predicting stock prices for {ticker_symbol}...")
+            prediction = predict_stock_prices(ticker_symbol, days_to_predict, training_years, seq_length)
+            
+            if prediction is None:
+                return f"❌ Unable to predict stock prices for {ticker_symbol}. Not enough historical data."
+            
+            return prediction
+        
+        except Exception as e:
+            return f"❌ Error predicting stock prices: {str(e)}"
     
     async def setup_session(self, ticker):
         session_id = f"{self.session_id_base}_{ticker}"

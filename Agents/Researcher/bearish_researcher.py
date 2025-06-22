@@ -1,4 +1,5 @@
 import os
+import sys
 import asyncio
 import requests
 from google.adk import Agent, Runner
@@ -6,8 +7,14 @@ from google.adk.sessions import InMemorySessionService
 from google.adk.tools import google_search
 from google.genai import types
 from dotenv import load_dotenv
+
 import json
 import time
+
+custom_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'custom')
+sys.path.append(os.path.dirname(custom_path))
+
+from custom.price_prediction import predict_stock_prices
 
 class BearishResearcher:
     
@@ -100,8 +107,14 @@ class BearishResearcher:
 
             Always remember: Your role is to identify and articulate legitimate investment risks while maintaining intellectual honesty and professional integrity. You seek to uncover hidden dangers and overvaluation that others might overlook.
             """,
+            tools=[
+                self.get_price_prediction
+            ]
         )
-    
+        
+    def get_price_prediction(self, ticker_symbol: str, days_ahead: int = 30) -> str:
+        return predict_stock_prices(symbol=ticker_symbol, days_to_predict=days_ahead, training_years=5, seq_length=30)
+
     async def setup_session(self, ticker):
         session_id = f"{self.session_id_base}_{ticker}"
         
