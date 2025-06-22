@@ -1,4 +1,4 @@
-# QuantumQuants
+# AlphaForge
 
 AlphaForge is a modular, multi-agent AI research and trading workflow built as a submission for the **Google Agent Development Kit Hackathon**. This project demonstrates how to orchestrate multiple specialized AI agents using the [Agent Development Kit](https://github.com/google/agent-development-kit) and Google Cloud for robust, explainable, and automated financial decision-making.
 
@@ -29,7 +29,7 @@ flowchart TD
     B2 --> C
     B3 --> C
     B4 --> C
-    C[Researcher Debate (Bull vs Bear)]
+    C[Researcher Debate – Bull vs Bear]
     C --> D[Debate Judge]
     D --> E[Debate Synthesizer]
     E --> F[Risk Synthesizer]
