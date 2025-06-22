@@ -12,7 +12,7 @@ AlphaForge is a modular, multi-agent AI research and trading workflow built as a
 - **Trader Agent:** Makes a final actionable trading decision (BUY/HOLD/SELL) based on all synthesized insights.
 - **Reflection Agent:** Checks the trader's decision for hallucinations or unsupported claims, ensuring reliability.
 - **Automated Workflow:** The entire process is orchestrated in a single pipeline, with feedback loops for correction if hallucinations are detected.
-- **Google Cloud Ready:** Built to leverage Google Cloud and the Agent Development Kit for scalable, production-grade agent orchestration.
+
 
 ---
 
