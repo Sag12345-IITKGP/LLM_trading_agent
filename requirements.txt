@@ -1,0 +1,7 @@
+google-genai
+google-adk
+google-adk[extensions]
+crewai_tools
+langchain
+langchain_community
+tavily-python
