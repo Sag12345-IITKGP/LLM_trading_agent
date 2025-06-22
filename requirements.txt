@@ -5,3 +5,4 @@ crewai_tools
 langchain
 langchain_community
 tavily-python
+yfinance
