@@ -7,9 +7,8 @@ from google.genai import types
 from dotenv import load_dotenv
 from langgraph.graph import StateGraph, END
 
-
 class DebateState:
-    def __init__(self, ticker, technical, sentiment, news, fundamentals, history=None, turn="bull", round=0, max_rounds=4, judge_verdict=None):
+    def __init__(self, ticker, technical, sentiment, news, fundamentals, history=None, turn="bull", round=0, max_rounds=4, judge_verdict=None, synthesis=None):
         self.ticker = ticker
         self.technical = technical
         self.sentiment = sentiment
@@ -20,6 +19,7 @@ class DebateState:
         self.round = round
         self.max_rounds = max_rounds
         self.judge_verdict = judge_verdict
+        self.synthesis = synthesis
 
     def add_message(self, role, content):
         self.history.append({"role": role, "content": content})
@@ -40,7 +40,8 @@ class DebateState:
             "turn": self.turn,
             "round": self.round,
             "max_rounds": self.max_rounds,
-            "judge_verdict": self.judge_verdict
+            "judge_verdict": self.judge_verdict,
+            "synthesis": self.synthesis
         }
 
     @classmethod
@@ -55,9 +56,9 @@ class DebateState:
             turn=d.get("turn", "bull"),
             round=d.get("round", 0),
             max_rounds=d.get("max_rounds", 4),
-            judge_verdict=d.get("judge_verdict", None)
+            judge_verdict=d.get("judge_verdict", None),
+            synthesis=d.get("synthesis", None)
         )
-
 
 class DebateJudge:
     def __init__(self):
@@ -96,7 +97,6 @@ Only respond with "bull", "bear", or "tie" to the debate arguments, don't provid
         transcript = ""
         for i, msg in enumerate(debate_history, 1):
             transcript += f"Turn {i} [{msg['role'].upper()}]:\n{msg['content']}\n\n"
-        
         prompt = f"""
 You are the judge for the following investment debate about {ticker.upper()}.
 Here is the full transcript:
@@ -118,6 +118,65 @@ Please provide:
                 return event.content.parts[0].text
         return "No verdict returned."
 
+class DebateSynthesizer:
+    def __init__(self):
+        load_dotenv()
+        self.app_name = "debate_synthesizer"
+        self.user_id = "synth_user"
+        self.session_id_base = "debate_synth_session"
+        self.session_service = InMemorySessionService()
+        self.runner = None
+        self.agent = self._create_agent()
+
+    def _create_agent(self):
+        return Agent(
+            name="debate_synthesizer",
+            model="gemini-2.0-flash",
+            description="Synthesizer for summarizing and concluding the debate outcome",
+            instruction="""
+You are a financial debate synthesizer. Your job is to review the full transcript and the judge's verdict of a bull vs bear investment debate, and provide a final, concise, and actionable summary for an investor. 
+Summarize the strongest points from both sides, clearly state the judge's verdict, and give a balanced, practical takeaway for decision-making.
+"""
+        )
+
+    async def synthesize(self, ticker, debate_history, judge_verdict):
+        session_id = f"{self.session_id_base}_{ticker}"
+        await self.session_service.create_session(
+            app_name=self.app_name,
+            user_id=self.user_id,
+            session_id=session_id
+        )
+        self.runner = Runner(
+            agent=self.agent,
+            app_name=self.app_name,
+            session_service=self.session_service
+        )
+        transcript = ""
+        for i, msg in enumerate(debate_history, 1):
+            transcript += f"Turn {i} [{msg['role'].upper()}]:\n{msg['content']}\n\n"
+        prompt = f"""
+You are the synthesizer for the following investment debate about {ticker.upper()}.
+Here is the full transcript:
+
+{transcript}
+
+Judge's Verdict: {judge_verdict}
+
+Please provide:
+1. A concise summary of the strongest bull and bear arguments.
+2. The judge's verdict.
+3. A balanced, actionable takeaway for an investor.
+"""
+        content = types.Content(role='user', parts=[types.Part(text=prompt)])
+        events = self.runner.run_async(
+            user_id=self.user_id,
+            session_id=session_id,
+            new_message=content
+        )
+        async for event in events:
+            if event.is_final_response():
+                return event.content.parts[0].text
+        return "No synthesis returned."
 
 def bull_node(state_dict):
     bull = BullishResearcher()
@@ -132,7 +191,6 @@ def bull_node(state_dict):
     state.add_message("bull", result)
     state.turn = "bear"
     return state.as_dict()
-
 
 def bear_node(state_dict):
     bear = BearishResearcher()
@@ -149,7 +207,6 @@ def bear_node(state_dict):
     state.round += 1
     return state.as_dict()
 
-
 async def judge_node(state_dict):
     judge = DebateJudge()
     state = DebateState.from_dict(state_dict)
@@ -158,10 +215,15 @@ async def judge_node(state_dict):
     state.judge_verdict = verdict
     return state.as_dict()
 
+async def synth_node(state_dict):
+    synthesizer = DebateSynthesizer()
+    state = DebateState.from_dict(state_dict)
+    synthesis = await synthesizer.synthesize(state.ticker, state.history, state.judge_verdict)
+    state.synthesis = synthesis
+    return state.as_dict()
 
 def debate_end(state_dict):
     return state_dict
-
 
 def debate_router(state_dict):
     state = DebateState.from_dict(state_dict)
@@ -171,11 +233,10 @@ def debate_router(state_dict):
             state.turn = "bull"
             return "bull"
         if any(x in verdict for x in ["bull", "bear", "tie"]):
-            return "end"
+            return "synth"
     if state.round >= state.max_rounds:
-        return "end"
+        return "synth"
     return state.turn
-
 
 async def run_debate_simulation_async(
     ticker,
@@ -185,7 +246,6 @@ async def run_debate_simulation_async(
     fundamentals,
     max_rounds=6
 ):
-    """Async version of debate simulation for use in other async contexts"""
     state = DebateState(ticker, technical, sentiment, news, fundamentals)
     state.max_rounds = max_rounds
 
@@ -193,10 +253,9 @@ async def run_debate_simulation_async(
     graph.add_node("bull", bull_node)
     graph.add_node("bear", bear_node)
     graph.add_node("judge", judge_node)
+    graph.add_node("synth", synth_node)
     graph.add_node("end", debate_end)
-    
     graph.set_entry_point("bull")
-    
     graph.add_conditional_edges(
         "bull", lambda s: "bear", {"bear": "bear"}
     )
@@ -204,14 +263,15 @@ async def run_debate_simulation_async(
         "bear", lambda s: "judge", {"judge": "judge"}
     )
     graph.add_conditional_edges(
-        "judge", debate_router, {"bull": "bull", "end": "end"}
+        "judge", debate_router, {"bull": "bull", "synth": "synth"}
+    )
+    graph.add_conditional_edges(
+        "synth", lambda s: "end", {"end": "end"}
     )
     graph.add_edge("end", END)
-    
     debate_graph = graph.compile()
     final_state_dict = await debate_graph.ainvoke(state.as_dict())
     return DebateState.from_dict(final_state_dict)
-
 
 def run_debate_simulation(
     ticker,
@@ -221,17 +281,16 @@ def run_debate_simulation(
     fundamentals,
     max_rounds=6
 ):
-    """Synchronous wrapper for debate simulation - can be imported and used in other files"""
     return asyncio.run(run_debate_simulation_async(
         ticker, technical, sentiment, news, fundamentals, max_rounds
     ))
 
-
-def print_debate_results(final_state):
+def debate_results(final_state):
     print(f"Debate Simulation for {final_state.ticker}:\n")
     for i, msg in enumerate(final_state.history, 1):
         print(f"Turn {i} [{msg['role'].upper()}]:\n{msg['content']}\n{'-'*60}")
-
+    print("\nSYNTHESIS:\n")
+    return final_state.synthesis
 
 if __name__ == "__main__":
     ticker = "NVDA"
@@ -244,5 +303,5 @@ if __name__ == "__main__":
     final_state = run_debate_simulation(
         ticker, technical, sentiment, news, fundamentals, max_rounds
     )
-    
-    print_debate_results(final_state)
+    results = debate_results(final_state)
+    print(results)
