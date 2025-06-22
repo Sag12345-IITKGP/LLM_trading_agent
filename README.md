@@ -1,6 +1,6 @@
 # AlphaForge
 
-AlphaForge is a modular, multi-agent AI research and trading workflow built as a submission for the **Google Agent Development Kit Hackathon**. This project demonstrates how to orchestrate multiple specialized AI agents using the [Agent Development Kit](https://github.com/google/agent-development-kit) and Google Cloud for robust, explainable, and automated financial decision-making.
+AlphaForge is a modular, multi-agent AI research and trading workflow built as a submission for the **Google Agent Development Kit Hackathon**. This project demonstrates how to orchestrate multiple specialized AI agents using the [Agent Development Kit](https://github.com/google/adk-python) and Google Cloud for robust, explainable, and automated financial decision-making.
 
 ---
 
