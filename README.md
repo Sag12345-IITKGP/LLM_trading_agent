@@ -115,4 +115,4 @@ MIT License
 ---
 
 **Submission for the Google Agent Development Kit Hackathon:**  
-AlphaForge — Modular, explainable, and robust multi-agent AI for financial research and trading, built for the Agent Development Kit and
+AlphaForge — Modular, explainable, and robust multi-agent AI for financial research and trading, built for the Agent Development Kit hackathon
